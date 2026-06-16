@@ -10,11 +10,13 @@ CI in the main repository tests the fork **with** local `replace` paths. The for
 
 ## Prerequisites
 
-1. Empty GitHub repository: `github.com/velonetics/velonetics-websocket`
-2. Published dependencies already tagged on GitHub:
+1. GitHub org membership with permission to create repositories under `velonetics` (or create the repo manually first).
+2. `gh` CLI authenticated (`gh auth login`).
+3. Published dependencies already tagged on GitHub:
    - `github.com/velonetics/lura/v2`
    - `github.com/velonetics/velonetics-jose/v2` (test dependency only — not required at runtime for the library)
-3. `git` and `gh` CLI authenticated
+
+The publish script creates `github.com/velonetics/velonetics-websocket` automatically when it is missing (requires `gh` and org access).
 
 ## Publish a version
 
@@ -34,15 +36,23 @@ The script will:
 
 ## After publishing
 
-1. Update the root `go.mod` require line:
+Published module: https://github.com/velonetics/velonetics-websocket
+
+1. Update the root `go.mod` require line when bumping versions:
 
    ```go
    github.com/velonetics/velonetics-websocket/v2 v2.0.1
    ```
 
-2. Remove the local `replace` directive when you want CI to consume the published module (or keep `replace` for local development).
+2. Keep the local `replace` directive while developing the fork locally:
 
-3. Re-run main CI (`go test`, `make check-fixtures`).
+   ```go
+   github.com/velonetics/velonetics-websocket/v2 => ./forks/velonetics-websocket
+   ```
+
+   Remove it when you want local builds to use the published module (CI already does this automatically).
+
+3. Re-run main CI (`go test`, `make check-fixtures`, `make ws-compose-test`).
 
 ## Module path and versioning
 

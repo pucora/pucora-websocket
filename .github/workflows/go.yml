@@ -1,0 +1,29 @@
+name: Go
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test (standalone module graph)
+        run: |
+          if grep -q '^replace ' go.mod; then
+            awk '/^replace /,/^\)/{next} 1' go.mod > go.mod.ci
+            mv go.mod.ci go.mod
+            GOPROXY=direct go mod tidy
+          fi
+          go test ./...

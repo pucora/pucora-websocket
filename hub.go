@@ -34,6 +34,7 @@ type Hub struct {
 	backoff    backoffFunc
 	writeMu    sync.Mutex
 
+	connectMu   sync.Mutex
 	reconnectMu sync.Mutex
 }
 
@@ -98,6 +99,9 @@ func (h *Hub) HandleClient(ctx context.Context, s *ClientSession, endpointURL st
 }
 
 func (h *Hub) connectBackend(ctx context.Context) error {
+	h.connectMu.Lock()
+	defer h.connectMu.Unlock()
+
 	h.backendMu.Lock()
 	url := h.backendURL
 	headers := cloneHeader(h.headers)

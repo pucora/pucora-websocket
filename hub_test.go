@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,5 +132,55 @@ func TestHubFlushPendingAfterReconnect(t *testing.T) {
 			t.Fatal("backend never received flushed message")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestConnectBackendSerialized(t *testing.T) {
+	var dials atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dials.Add(1)
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close(websocket.StatusNormalClosure, "bye")
+		ctx := r.Context()
+		_, data, err := c.Read(ctx)
+		if err != nil {
+			return
+		}
+		if string(data) == handshakeMessage {
+			_ = c.Write(ctx, websocket.MessageText, []byte(handshakeOK))
+		}
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer backend.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(backend.URL, "http")
+	cfg := Config{MaxRetries: 1, BackoffStrategy: "fallback", WriteWait: time.Second}
+	hub := &Hub{
+		endpoint: "/echo",
+		cfg:      cfg,
+		logger:   logging.NoOp,
+		clients:  make(map[string]*ClientSession),
+		backoff:  newBackoff(cfg.BackoffStrategy),
+	}
+	hub.backendURL = wsURL
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = hub.connectBackend(ctx)
+		}()
+	}
+	wg.Wait()
+
+	if got := dials.Load(); got != 1 {
+		t.Fatalf("expected exactly one backend dial, got %d", got)
 	}
 }

@@ -270,7 +270,7 @@ func (h *Hub) routeFromBackend(data []byte) {
 		if h.metrics != nil {
 			h.metrics.messageOut(context.Background(), h.endpoint)
 		}
-		_ = client.enqueue(payload)
+		h.deliverToClient(client, payload)
 	}
 }
 
@@ -281,8 +281,15 @@ func (h *Hub) broadcast(msg []byte) {
 		if h.metrics != nil {
 			h.metrics.messageOut(context.Background(), h.endpoint)
 		}
-		_ = client.enqueue(msg)
+		h.deliverToClient(client, msg)
 	}
+}
+
+func (h *Hub) deliverToClient(client *ClientSession, payload []byte) {
+	if client.enqueue(payload) {
+		return
+	}
+	h.logger.Warning("[SERVICE: Websocket][Client]", "Client outbox full; message dropped")
 }
 
 func (h *Hub) sendToBackend(ctx context.Context, s *ClientSession, env Envelope) error {
@@ -330,10 +337,15 @@ func (h *Hub) flushAllPending(ctx context.Context) {
 	h.mu.RUnlock()
 
 	for _, client := range clients {
-		for _, data := range client.drainInbound() {
+		pending := client.drainInbound()
+		for i, data := range pending {
 			if err := h.writeBackend(ctx, data); err != nil {
 				if err.Error() == errEmptyConnection {
-					client.requeueInbound(data)
+					for j := i; j < len(pending); j++ {
+						if !client.requeueInbound(pending[j]) {
+							h.logger.Warning("[SERVICE: Websocket]", "Unable to requeue pending message; inbox full")
+						}
+					}
 					h.markBackendDown()
 					h.scheduleReconnect()
 					return

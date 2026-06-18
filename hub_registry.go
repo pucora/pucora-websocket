@@ -5,6 +5,9 @@ package websocket
 func ResetHubRegistry() {
 	hubRegistry.Range(func(key, value interface{}) bool {
 		h := value.(*Hub)
+		if h.lifecycleCancel != nil {
+			h.lifecycleCancel()
+		}
 		h.markBackendDown()
 		h.mu.Lock()
 		for id, client := range h.clients {

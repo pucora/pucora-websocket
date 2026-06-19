@@ -119,7 +119,3 @@ require (
 	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
-
-replace github.com/pucora/lura/v2 => ../lura
-
-replace github.com/pucora/pucora-jose/v2 => ../pucora-jose
